@@ -37,6 +37,21 @@ if uploaded_file and st.button("Generate Schedule"):
     df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(" ", "").str.replace(",", ",")
     df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(" ", "").str.replace(":", "").str.replace(",", ",")
 
+    # Normalize any service times to supported values: 8am, 930am, 11am
+    def normalize_times(times):
+        replacements = {
+            '800am': '8am', '830am': '8am', '900am': '930am', '0930am': '930am', '930am': '930am',
+            '1000am': '930am', '1030am': '930am', '1100am': '11am', '1130am': '11am', '11am': '11am'
+        }
+        normalized = set()
+        for t in times.split(','):
+            t_clean = t.strip()
+            if t_clean in replacements:
+                normalized.add(replacements[t_clean])
+        return ','.join(normalized)
+
+    df_clean['Service Times Available'] = df_clean['Service Times Available'].apply(normalize_times)
+
     blackout_dict = {}
     for _, row in df_clean.iterrows():
         name = row['Full name']
