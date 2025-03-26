@@ -17,16 +17,28 @@ if uploaded_file and st.button("Generate Schedule"):
     else:
         df = pd.read_excel(uploaded_file)
 
-    df.columns = df.columns.str.strip()
+# Normalize all column names
+df.columns = df.columns.str.strip().str.lower()
 
-    # Ensure Black Out Dates column exists
-    if 'Black Out Dates' not in df.columns:
-        df['Black Out Dates'] = ""
+# Create a mapping from lowercase to expected names
+rename_map = {
+    'full name': 'Full name',
+    'service week available': 'Service Week Available',
+    'service times available': 'Service Times Available',
+    'black out dates': 'Black Out Dates'
+}
 
-    # Clean relevant fields
-    df_clean = df[['Full name', 'Service Week Available', 'Service Times Available', 'Black Out Dates']].dropna(subset=['Full name'])
-    df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(' ', '')
-    df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(' ', '').str.replace(':', '')
+# Rename columns
+df.rename(columns=rename_map, inplace=True)
+
+# Add any missing expected columns
+for col in rename_map.values():
+    if col not in df.columns:
+        df[col] = ""
+
+# Subset safely
+df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
+    
 
     # Parse blackout dates into dictionary
     blackout_dict = {}
