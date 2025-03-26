@@ -3,9 +3,9 @@ import pandas as pd
 from datetime import date
 from collections import defaultdict
 
-st.set_page_config(page_title="Volunteer Scheduler", layout="wide")
-st.title("Church Volunteer Scheduler")
-st.warning("🧪 This is the latest version of the app!")    
+st.set_page_config(page_title="Prayer Volunteer Scheduler", layout="wide")
+st.title("Prayer Volunteer Scheduler")
+st.warning("🧪 This is the latest version of the app!")
 
 uploaded_file = st.file_uploader("Upload volunteer availability file (.csv or .xlsx)", type=["csv", "xlsx"])
 range_option = st.selectbox("Schedule for how long?", ["1 month", "2 months", "3 months"])
@@ -23,8 +23,9 @@ if uploaded_file and st.button("Generate Schedule"):
     rename_map = {
         'full name': 'Full name',
         'service week available': 'Service Week Available',
+        'service week avaliable': 'Service Week Available',  # typo fix
         'service times available': 'Service Times Available',
-        'service times avaliable': 'Service Times Available',  # common typo fix
+        'service times avaliable': 'Service Times Available',  # typo fix
         'black out dates': 'Black Out Dates'
     }
     df.rename(columns=rename_map, inplace=True)
@@ -38,11 +39,12 @@ if uploaded_file and st.button("Generate Schedule"):
     df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(" ", "").str.replace(",", ",")
     df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(" ", "").str.replace(":", "").str.replace(",", ",")
 
-    # Normalize any service times to supported values: 8am, 930am, 11am
     def normalize_times(times):
         replacements = {
-            '800am': '8am', '830am': '8am', '900am': '930am', '0930am': '930am', '930am': '930am',
-            '1000am': '930am', '1030am': '930am', '1100am': '11am', '1130am': '11am', '11am': '11am'
+            '800am': '8am', '830am': '8am',
+            '900am': '930am', '0930am': '930am', '930am': '930am',
+            '1000am': '930am', '1030am': '930am',
+            '1100am': '11am', '1130am': '11am', '11am': '11am'
         }
         normalized = set()
         for t in times.split(','):
@@ -105,7 +107,6 @@ if uploaded_file and st.button("Generate Schedule"):
     csv = schedule_df.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Download Schedule CSV", data=csv, file_name="Volunteer_Schedule.csv", mime='text/csv')
 
-    # Monthly Summary Table
     st.markdown("### 📊 Volunteer Monthly Summary")
     summary_data = []
     months = sorted(set([d.strftime('%Y-%m') for d in all_sundays]))
@@ -130,7 +131,6 @@ if uploaded_file and st.button("Generate Schedule"):
     else:
         st.success("🎉 All volunteers met the 1x/month minimum!")
 
-    # Excel export with monthly tabs
     xls_path = "/tmp/Volunteer_Schedule_Monthly_Tabs.xlsx"
     with pd.ExcelWriter(xls_path, engine='openpyxl') as writer:
         schedule_df['Month'] = pd.to_datetime(schedule_df['Date']).dt.to_period('M')
