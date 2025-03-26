@@ -17,6 +17,7 @@ if uploaded_file and st.button("Generate Schedule"):
     else:
         df = pd.read_excel(uploaded_file)
 
+    # Normalize and rename columns
     df.columns = df.columns.str.strip().str.lower()
     rename_map = {
         'full name': 'Full name',
@@ -31,8 +32,10 @@ if uploaded_file and st.button("Generate Schedule"):
             df[col] = ""
 
     df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
-    df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(' ', '')
-    df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(' ', '').str.replace(':', '')
+
+    # Normalize week and time strings for bulletproof matching
+    df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(" ", "").str.replace(",", ",")
+    df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(" ", "").str.replace(":", "").str.replace(",", ",")
 
     blackout_dict = {}
     for _, row in df_clean.iterrows():
@@ -47,27 +50,23 @@ if uploaded_file and st.button("Generate Schedule"):
     end_date = start_date + pd.DateOffset(months=range_months)
     all_sundays = pd.date_range(start=start_date, end=end_date, freq='W-SUN')
     week_labels = ['1stsunday', '2ndsunday', '3rdsunday', '4thsunday', '5thsunday']
-    week_number_map = {i: week_labels[i % 5] for i in range(len(all_sundays))}
-
     volunteer_monthly_count = defaultdict(lambda: defaultdict(int))
     schedule_data = []
 
-    for i, sunday in enumerate(all_sundays):
-        week_label = week_number_map[i]
+    for sunday in all_sundays:
+        week_of_month = ((sunday.day - 1) // 7) + 1
+        week_label = week_labels[week_of_month - 1] if week_of_month <= 5 else '5thsunday'
         month = sunday.strftime('%Y-%m')
         date_str = sunday.strftime('%Y-%m-%d')
         for service_time in ['8am', '930am', '11am']:
-            eligible = df_clean[
-                df_clean['Service Week Available'].str.contains(week_label) &
-                df_clean['Service Times Available'].str.contains(service_time)
-            ]['Full name'].tolist()
+            eligible = []
+            for _, row in df_clean.iterrows():
+                if week_label in row['Service Week Available'] and service_time in row['Service Times Available']:
+                    if date_str not in blackout_dict.get(row['Full name'], set()):
+                        if volunteer_monthly_count[row['Full name']][month] < 2:
+                            eligible.append(row['Full name'])
 
-            selected = []
-            for volunteer in eligible:
-                if volunteer_monthly_count[volunteer][month] < 2 and date_str not in blackout_dict.get(volunteer, set()):
-                    selected.append(volunteer)
-                if len(selected) == 2:
-                    break
+            selected = eligible[:2]
 
             for slot in range(2):
                 if selected:
@@ -104,7 +103,6 @@ if uploaded_file and st.button("Generate Schedule"):
     summary_df = pd.DataFrame(summary_data)
     st.dataframe(summary_df, use_container_width=True)
 
-    # Volunteers Who Didn't Meet Minimum
     min_missed = [(row['Volunteer'], month)
                   for row in summary_data
                   for month in months if row[month] < 1]
@@ -116,16 +114,16 @@ if uploaded_file and st.button("Generate Schedule"):
     else:
         st.success("🎉 All volunteers met the 1x/month minimum!")
 
-    # Export to Excel with separate monthly tabs
-    xls_buffer = pd.ExcelWriter("/tmp/Volunteer_Schedule_Months.xlsx", engine='openpyxl')
-    schedule_df['Month'] = pd.to_datetime(schedule_df['Date']).dt.to_period('M')
-    for period, group_df in schedule_df.groupby('Month'):
-        month_name = period.strftime('%B %Y')
-        group_df.drop(columns=['Month'], inplace=True)
-        group_df.to_excel(xls_buffer, sheet_name=month_name, index=False)
-    xls_buffer.close()
+    # Excel export with monthly tabs
+    xls_path = "/tmp/Volunteer_Schedule_Monthly_Tabs.xlsx"
+    with pd.ExcelWriter(xls_path, engine='openpyxl') as writer:
+        schedule_df['Month'] = pd.to_datetime(schedule_df['Date']).dt.to_period('M')
+        for period, group_df in schedule_df.groupby('Month'):
+            month_name = period.strftime('%B %Y')
+            group_df.drop(columns=['Month'], inplace=True)
+            group_df.to_excel(writer, sheet_name=month_name, index=False)
 
-    with open("/tmp/Volunteer_Schedule_Months.xlsx", "rb") as f:
+    with open(xls_path, "rb") as f:
         st.download_button(
             label="📥 Download Excel with Monthly Tabs",
             data=f.read(),
