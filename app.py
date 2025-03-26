@@ -17,30 +17,29 @@ if uploaded_file and st.button("Generate Schedule"):
     else:
         df = pd.read_excel(uploaded_file)
 
-# Normalize all column names
-df.columns = df.columns.str.strip().str.lower()
+    # Normalize columns: remove spaces, make lowercase
+    df.columns = df.columns.str.strip().str.lower()
 
-# Create a mapping from lowercase to expected names
-rename_map = {
-    'full name': 'Full name',
-    'service week available': 'Service Week Available',
-    'service times available': 'Service Times Available',
-    'black out dates': 'Black Out Dates'
-}
+    # Rename to expected casing
+    rename_map = {
+        'full name': 'Full name',
+        'service week available': 'Service Week Available',
+        'service times available': 'Service Times Available',
+        'black out dates': 'Black Out Dates'
+    }
+    df.rename(columns=rename_map, inplace=True)
 
-# Rename columns
-df.rename(columns=rename_map, inplace=True)
+    # Add missing columns if needed
+    for col in rename_map.values():
+        if col not in df.columns:
+            df[col] = ""
 
-# Add any missing expected columns
-for col in rename_map.values():
-    if col not in df.columns:
-        df[col] = ""
+    # Clean and prepare
+    df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
+    df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(' ', '')
+    df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(' ', '').str.replace(':', '')
 
-# Subset safely
-df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
-    
-
-    # Parse blackout dates into dictionary
+    # Build blackout date dictionary
     blackout_dict = {}
     for _, row in df_clean.iterrows():
         name = row['Full name']
@@ -51,7 +50,7 @@ df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
         else:
             blackout_dict[name] = set()
 
-    # Get date range Sundays
+    # Schedule range
     end_date = start_date + pd.DateOffset(months=range_months)
     all_sundays = pd.date_range(start=start_date, end=end_date, freq='W-SUN')
 
@@ -71,7 +70,6 @@ df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
                 df_clean['Service Times Available'].str.contains(service_time)
             ]['Full name'].tolist()
 
-            # Filter out based on blackout dates and monthly limits
             selected = []
             for volunteer in eligible:
                 if volunteer_monthly_count[volunteer][month] < 2 and date_str not in blackout_dict.get(volunteer, set()):
