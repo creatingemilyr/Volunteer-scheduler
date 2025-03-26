@@ -1,4 +1,3 @@
-st.warning("🧪 This is the latest version of the app!")    
 import streamlit as st
 import pandas as pd
 from datetime import date
@@ -6,6 +5,7 @@ from collections import defaultdict
 
 st.set_page_config(page_title="Volunteer Scheduler", layout="wide")
 st.title("Church Volunteer Scheduler")
+st.warning("🧪 This is the latest version of the app!")    
 
 uploaded_file = st.file_uploader("Upload volunteer availability file (.csv or .xlsx)", type=["csv", "xlsx"])
 range_option = st.selectbox("Schedule for how long?", ["1 month", "2 months", "3 months"])
