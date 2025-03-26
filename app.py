@@ -17,10 +17,7 @@ if uploaded_file and st.button("Generate Schedule"):
     else:
         df = pd.read_excel(uploaded_file)
 
-    # Normalize columns: remove spaces, make lowercase
     df.columns = df.columns.str.strip().str.lower()
-
-    # Rename to expected casing
     rename_map = {
         'full name': 'Full name',
         'service week available': 'Service Week Available',
@@ -29,17 +26,14 @@ if uploaded_file and st.button("Generate Schedule"):
     }
     df.rename(columns=rename_map, inplace=True)
 
-    # Add missing columns if needed
     for col in rename_map.values():
         if col not in df.columns:
             df[col] = ""
 
-    # Clean and prepare
     df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
     df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(' ', '')
     df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(' ', '').str.replace(':', '')
 
-    # Build blackout date dictionary
     blackout_dict = {}
     for _, row in df_clean.iterrows():
         name = row['Full name']
@@ -50,10 +44,8 @@ if uploaded_file and st.button("Generate Schedule"):
         else:
             blackout_dict[name] = set()
 
-    # Schedule range
     end_date = start_date + pd.DateOffset(months=range_months)
     all_sundays = pd.date_range(start=start_date, end=end_date, freq='W-SUN')
-
     week_labels = ['1stsunday', '2ndsunday', '3rdsunday', '4thsunday', '5thsunday']
     week_number_map = {i: week_labels[i % 5] for i in range(len(all_sundays))}
 
@@ -92,8 +84,51 @@ if uploaded_file and st.button("Generate Schedule"):
                 })
 
     schedule_df = pd.DataFrame(schedule_data)
-    st.success("Schedule generated!")
+    st.success("✅ Schedule generated!")
     st.dataframe(schedule_df, use_container_width=True)
 
     csv = schedule_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Schedule CSV", data=csv, file_name="Volunteer_Schedule.csv", mime='text/csv')
+    st.download_button("📥 Download Schedule CSV", data=csv, file_name="Volunteer_Schedule.csv", mime='text/csv')
+
+    # Monthly Summary Table
+    st.markdown("### 📊 Volunteer Monthly Summary")
+    summary_data = []
+    months = sorted(set([d.strftime('%Y-%m') for d in all_sundays]))
+
+    for volunteer in df_clean['Full name']:
+        row = {"Volunteer": volunteer}
+        for month in months:
+            row[month] = volunteer_monthly_count[volunteer][month]
+        summary_data.append(row)
+
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True)
+
+    # Volunteers Who Didn't Meet Minimum
+    min_missed = [(row['Volunteer'], month)
+                  for row in summary_data
+                  for month in months if row[month] < 1]
+
+    if min_missed:
+        st.markdown("### ⚠️ Volunteers Who Didn't Meet the 1x/Month Minimum")
+        missed_df = pd.DataFrame(min_missed, columns=["Volunteer", "Month"])
+        st.dataframe(missed_df)
+    else:
+        st.success("🎉 All volunteers met the 1x/month minimum!")
+
+    # Export to Excel with separate monthly tabs
+    xls_buffer = pd.ExcelWriter("/tmp/Volunteer_Schedule_Months.xlsx", engine='openpyxl')
+    schedule_df['Month'] = pd.to_datetime(schedule_df['Date']).dt.to_period('M')
+    for period, group_df in schedule_df.groupby('Month'):
+        month_name = period.strftime('%B %Y')
+        group_df.drop(columns=['Month'], inplace=True)
+        group_df.to_excel(xls_buffer, sheet_name=month_name, index=False)
+    xls_buffer.close()
+
+    with open("/tmp/Volunteer_Schedule_Months.xlsx", "rb") as f:
+        st.download_button(
+            label="📥 Download Excel with Monthly Tabs",
+            data=f.read(),
+            file_name="Volunteer_Schedule_Monthly_Tabs.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
