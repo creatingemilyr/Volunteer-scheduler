@@ -23,17 +23,17 @@ if uploaded_file and st.button("Generate Schedule"):
         'full name': 'Full name',
         'service week available': 'Service Week Available',
         'service times available': 'Service Times Available',
+        'service times avaliable': 'Service Times Available',  # common typo fix
         'black out dates': 'Black Out Dates'
     }
     df.rename(columns=rename_map, inplace=True)
 
-    for col in rename_map.values():
+    expected_cols = ['Full name', 'Service Week Available', 'Service Times Available', 'Black Out Dates']
+    for col in expected_cols:
         if col not in df.columns:
             df[col] = ""
 
-    df_clean = df[list(rename_map.values())].dropna(subset=['Full name'])
-
-    # Normalize week and time strings for bulletproof matching
+    df_clean = df[expected_cols].dropna(subset=['Full name'])
     df_clean['Service Week Available'] = df_clean['Service Week Available'].str.lower().str.replace(" ", "").str.replace(",", ",")
     df_clean['Service Times Available'] = df_clean['Service Times Available'].str.lower().str.replace(" ", "").str.replace(":", "").str.replace(",", ",")
 
